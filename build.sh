@@ -1,6 +1,11 @@
 #!/bin/bash
 go build -o server main.go
 
-docker build -t wapiti-server:v1 .
+docker build -t wapiti-server:$1 .
 
-rm -f server
+docker tag  wapiti-server:$1  wardknight/wapiti-server:$1
+
+docker push wardknight/wapiti-server:$1
+
+rm server
+

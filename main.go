@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"runtime"
+	"os"
 	"time"
 
 	"wapiti/manager"
@@ -17,18 +17,24 @@ import (
 )
 
 var (
-	c   = cache.New(5*time.Minute, 10*time.Minute)
+	c   = cache.New(time.Hour, 30*time.Minute)
 	log = logrus.New()
 )
 
+var timeOut = &models.TIMEOUT
+
 func main() {
-	startServer()
-}
+	env := os.Getenv("WAPITI_TIMEOUT")
+	if env != "" {
+		timeout, err := time.ParseDuration(env)
+		if err != nil {
+			log.Error(err)
+		} else {
+			timeOut = &timeout
+		}
+	}
 
-func startServer() {
-	num := runtime.NumCPU()
-
-	runtime.GOMAXPROCS(num << 2)
+	log.Warn("Env TIMEOUT:", timeOut)
 
 	router := httprouter.New()
 
@@ -36,7 +42,7 @@ func startServer() {
 	router.GET("/:id", GetResult)
 
 	if err := http.ListenAndServe(":8080", router); err != nil {
-		log.Panic(err)
+		panic(err)
 	}
 }
 
@@ -49,26 +55,42 @@ func Excute(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	}
 
 	m := manager.NewManager(request)
+	c.SetDefault(m.Uid, m.Response)
+
 	go func() {
-		m.Collector()
-		c.Set(m.Uuid.String(), m.Response, cache.DefaultExpiration)
+		m.Handler()
+		if m.Err != nil {
+			m.Response.Status = models.StatusFailed
+			m.Response.Error = m.Err.Error()
+		} else {
+			m.Response.Status = models.StatusComplete
+		}
+		c.SetDefault(m.Uid, m.Response)
 	}()
 
 	w.Header().Set("content-type", "application/json")
-	w.Header().Set("uuid", m.Uuid.String())
 	w.WriteHeader(http.StatusOK)
+
+	resp := map[string]string{
+		"uuid": m.Uid,
+	}
+	b, _ := json.Marshal(resp)
+	w.Write(b)
 }
 
 func GetResult(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	key := params.ByName("id")
 
 	w.Header().Set("content-type", "application/json")
-	if value, ok := c.Get(key); !ok {
+
+	value, ok := c.Get(key)
+	if !ok {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(errors.New(fmt.Sprintf("not found: %s", key)).Error()))
-	} else {
-		b, _ := json.Marshal(value)
-		w.WriteHeader(http.StatusOK)
-		w.Write(b)
+		return
 	}
+
+	b, _ := json.Marshal(value)
+	w.WriteHeader(http.StatusOK)
+	w.Write(b)
 }
