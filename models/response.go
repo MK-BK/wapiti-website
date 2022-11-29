@@ -11,7 +11,6 @@ const (
 )
 
 const (
-	StatusTimeout  = "Timeout"
 	StatusRunning  = "Running"
 	StatusComplete = "Complete"
 	StatusFailed   = "Failed"
@@ -19,23 +18,20 @@ const (
 
 func NewResponses() *Responses {
 	return &Responses{
-		Nmap:   make(map[string][]*NmapResponse, 0),
+		Nmap:   make(map[string]map[string]string, 0),
 		Kapiti: make(map[string][]*KapitiResponse, 0),
 		Status: StatusRunning,
 	}
 }
 
 type Responses struct {
-	Nmap   map[string][]*NmapResponse
+	Nmap   map[string]map[string]string
 	Kapiti map[string][]*KapitiResponse
 	Status string
 	Error  string
 }
 
-type NmapResponse struct {
-	Port     uint16
-	Protocol string
-}
+type NmapResponse map[int]string
 
 type KapitiResponse struct {
 	Port        string
@@ -44,5 +40,4 @@ type KapitiResponse struct {
 
 type ScanResult struct {
 	Vulnerabilities json.RawMessage `json:"vulnerabilities"`
-	Infos           json.RawMessage `json:"infos"`
 }

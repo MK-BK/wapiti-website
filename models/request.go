@@ -1,11 +1,13 @@
 package models
 
 type Request struct {
-	Config  map[string]Config `json:"config"`
-	Modules string            `json:"modules"`
+	Address  map[string][]string `json:"address"`
+	IsAttack bool                `json:"is_attack"`
+	Modules  string              `json:"modules"`
+	Timeout  TimeoutOption       `json:"timeout"`
 }
 
-type Config struct {
-	Ports    []string `json:"ports"`
-	IsAttack bool     `json:"is_attack"`
+type TimeoutOption struct {
+	Protocol string `json:"protocol"`
+	Attack   string `json:"attack"`
 }

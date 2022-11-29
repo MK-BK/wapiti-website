@@ -27,30 +27,57 @@ func NewManager(request *models.Request) *Manager {
 	}
 }
 
-// 在规定的时间内完成，或者超时失败
-func (m *Manager) Handler() {
-	start := time.Now()
-	log.Infof("Job: %+v start", m.Uid)
+func (m *Manager) Handler(ctx context.Context) error {
+	attackTimeout, err := time.ParseDuration(m.Request.Timeout.Attack)
+	if err != nil {
+		log.Error(err)
+	}
 
-	ctx := context.Background()
-
-	defer log.Infof("Job: %+v end, spend: %+v", m.Uid, time.Now().Sub(start))
+	protocolTimeout, errr := time.ParseDuration(m.Request.Timeout.Protocol)
+	if err != nil {
+		log.Error(errr)
+	}
 
 	var wg sync.WaitGroup
-	for ip, config := range m.Request.Config {
+
+	for ip, ports := range m.Request.Address {
 		wg.Add(1)
-		go func(ctx context.Context, ip string, config models.Config) {
+		go func() {
 			defer wg.Done()
-			if err := m.Nmap(ctx, ip, config.Ports); err != nil {
+
+			ctx, cancel := context.WithTimeout(ctx, protocolTimeout)
+			defer cancel()
+
+			result, err := m.Nmap(ctx, ip, ports)
+			if err != nil {
 				log.Error(err)
+				return
 			}
 
-			if config.IsAttack {
-				if err := m.Wapiti(ip, config.Ports); err != nil {
+			m.Response.Nmap[ip] = result
+		}()
+
+		if m.Request.IsAttack {
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+
+				ctx, cancel := context.WithTimeout(ctx, attackTimeout)
+				defer cancel()
+
+				result, err := m.Wapiti(ctx, ip, ports)
+				if err != nil {
 					log.Error(err)
+					return
 				}
-			}
-		}(ctx, ip, config)
+
+				m.Response.Kapiti[ip] = result
+			}()
+		}
 	}
+
 	wg.Wait()
+
+	return nil
 }

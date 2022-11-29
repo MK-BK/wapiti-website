@@ -96,13 +96,13 @@ func (s *Scanner) Run() (result *Run, warnings []string, err error) {
 
 	// Prepare nmap process
 	cmd := exec.Command(s.binaryPath, args...)
-
 	if s.modifySysProcAttr != nil {
 		s.modifySysProcAttr(cmd.SysProcAttr)
 	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
+	fmt.Println("cmd string:", cmd.String())
 	// Run nmap process
 	err = cmd.Start()
 	if err != nil {

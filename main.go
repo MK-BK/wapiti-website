@@ -1,17 +1,16 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"wapiti/manager"
 	"wapiti/models"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/gin-gonic/gin"
 	"github.com/patrickmn/go-cache"
 	"github.com/sirupsen/logrus"
 )
@@ -21,76 +20,55 @@ var (
 	log = logrus.New()
 )
 
-var timeOut = &models.TIMEOUT
-
 func main() {
-	env := os.Getenv("WAPITI_TIMEOUT")
-	if env != "" {
-		timeout, err := time.ParseDuration(env)
-		if err != nil {
-			log.Error(err)
-		} else {
-			timeOut = &timeout
-		}
-	}
+	e := gin.Default()
 
-	log.Warn("Env TIMEOUT:", timeOut)
+	e.GET("/:id", GetResult)
+	e.POST("/", Excute)
 
-	router := httprouter.New()
-
-	router.POST("/", Excute)
-	router.GET("/:id", GetResult)
-
-	if err := http.ListenAndServe(":8080", router); err != nil {
+	if err := http.ListenAndServe(":8080", e); err != nil {
 		panic(err)
 	}
 }
 
-func Excute(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func Excute(ctx *gin.Context) {
 	request := &models.Request{}
-	if err := json.NewDecoder(r.Body).Decode(request); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(err.Error()))
-		return
+
+	if err := ctx.ShouldBind(request); err != nil {
+		ctx.AbortWithError(http.StatusBadRequest, err)
 	}
 
 	m := manager.NewManager(request)
 	c.SetDefault(m.Uid, m.Response)
 
 	go func() {
-		m.Handler()
-		if m.Err != nil {
+		start := time.Now()
+
+		log.Infof("Job: %+v start", m.Uid)
+		defer log.Infof("Job: %+v end, spend: %+v", m.Uid, time.Now().Sub(start))
+
+		if err := m.Handler(context.Background()); err != nil {
 			m.Response.Status = models.StatusFailed
-			m.Response.Error = m.Err.Error()
+			m.Response.Error = err.Error()
 		} else {
 			m.Response.Status = models.StatusComplete
 		}
 		c.SetDefault(m.Uid, m.Response)
+
 	}()
 
-	w.Header().Set("content-type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	resp := map[string]string{
+	ctx.JSON(http.StatusOK, map[string]string{
 		"uuid": m.Uid,
-	}
-	b, _ := json.Marshal(resp)
-	w.Write(b)
+	})
 }
 
-func GetResult(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
-	key := params.ByName("id")
+func GetResult(ctx *gin.Context) {
+	id := ctx.Param("id")
 
-	w.Header().Set("content-type", "application/json")
-
-	value, ok := c.Get(key)
+	value, ok := c.Get(id)
 	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(errors.New(fmt.Sprintf("not found: %s", key)).Error()))
-		return
+		ctx.AbortWithError(http.StatusInternalServerError, errors.New(fmt.Sprintf("not found: %s", id)))
 	}
 
-	b, _ := json.Marshal(value)
-	w.WriteHeader(http.StatusOK)
-	w.Write(b)
+	ctx.JSON(http.StatusOK, value)
 }
