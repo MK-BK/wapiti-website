@@ -21,6 +21,7 @@ func (m *Manager) Wapiti(ctx context.Context, ip string, ports []string) ([]*mod
 
 			for _, cmd := range cmds {
 				cmd.Cmd.Stderr = os.Stderr
+				cmd.Cmd.Stdout = os.Stdout
 
 				if err := cmd.Cmd.Run(); err != nil {
 					log.Error(err)
@@ -65,6 +66,7 @@ func combineCmd(ip string, ports []string, modules string) []*models.RequestCmd 
 		args = append(args, "-u", url)
 		args = append(args, "-o", tmp.Name())
 		args = append(args, "-f", "json")
+		args = append(args, "--tasks", "10000")
 
 		if modules != "" {
 			args = append(args, "-m", modules)

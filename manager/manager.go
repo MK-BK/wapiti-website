@@ -42,7 +42,7 @@ func (m *Manager) Handler(ctx context.Context) error {
 
 	for ip, ports := range m.Request.Address {
 		wg.Add(1)
-		go func() {
+		go func(ip string, ports []string) {
 			defer wg.Done()
 
 			ctx, cancel := context.WithTimeout(ctx, protocolTimeout)
@@ -55,12 +55,12 @@ func (m *Manager) Handler(ctx context.Context) error {
 			}
 
 			m.Response.Nmap[ip] = result
-		}()
+		}(ip, ports)
 
 		if m.Request.IsAttack {
 			wg.Add(1)
 
-			go func() {
+			go func(ip string, ports []string) {
 				defer wg.Done()
 
 				ctx, cancel := context.WithTimeout(ctx, attackTimeout)
@@ -73,7 +73,7 @@ func (m *Manager) Handler(ctx context.Context) error {
 				}
 
 				m.Response.Kapiti[ip] = result
-			}()
+			}(ip, ports)
 		}
 	}
 

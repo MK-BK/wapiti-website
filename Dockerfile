@@ -1,4 +1,4 @@
-FROM sammascanner/wapiti:latest
+FROM wardknight/wapti-test:latest
 
 RUN apt-get update \ 
     && apt-get -y install nmap
