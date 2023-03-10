@@ -5,6 +5,6 @@ RUN apt-get update \
 
 COPY server /usr/bin/server
 
-EXPOSE 8080
+EXPOSE 18080
 
 CMD [ "server" ]
